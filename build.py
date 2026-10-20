@@ -52,8 +52,9 @@ W = {
     "RB":  {"rush_epa_per_carry": .3, "ypc": .2, "scrim_yds_per_snap": .25, "first_downs_per_snap": .15, "fumbles_lost_total": -.1},
     "WR":  {"rec_yds_per_snap": .35, "epa_per_target": .25, "target_share": .2, "catch_rate": .1, "first_downs_per_snap": .1},
     "TE":  {"rec_yds_per_snap": .3, "epa_per_target": .25, "catch_rate": .15, "first_downs_per_snap": .1, "snap_share": .2},
-    "OT":  {"team_sack_rate": -.35, "team_rush_epa": .3, "snap_share": .25, "penalties": -.1},
-    "IOL": {"team_sack_rate": -.3, "team_rush_epa": .35, "snap_share": .25, "penalties": -.1},
+    # offensive line: individual numbers from the OL model below
+    "OT":  {"pr_vs_slot": -.45, "gap_epa": .15, "gap_vs_team": .15, "ol_pen_per_100": -.15, "snap_share": .10},
+    "IOL": {"pr_vs_slot": -.35, "gap_epa": .2, "gap_vs_team": .2, "ol_pen_per_100": -.15, "snap_share": .10},
     "EDGE": {"pass_rush_per_100": .55, "tfl_per_100": .2, "ballhawk_per_100": .1, "snap_share": .15},
     "IDL": {"pass_rush_per_100": .4, "tfl_per_100": .3, "tackles_per_100": .15, "snap_share": .15},
     "LB":  {"tackles_per_100": .3, "tfl_per_100": .2, "pass_rush_per_100": .15, "ballhawk_per_100": .2, "snap_share": .15},
@@ -74,6 +75,134 @@ SUM_COLS = ["attempts", "completions", "passing_yards", "passing_tds", "passing_
             "fantasy_points_ppr", "penalties", "fumbles_lost_total"]
 
 
+# ---------------- individual offensive line model ----------------
+# Public data has no "sacks allowed" by blocker, so each lineman is credited
+# from three individual angles:
+#   1) Pass pro: pressures and sacks by the opposing defenders lined up across
+#      from him (that week's depth charts), scaled by how much of the game he played.
+#   2) Run blocking: EPA and success on runs through his gap(s), and how much
+#      better his gaps are than his team's other runs.
+#   3) Penalties he personally committed.
+OL_SLOTS = ["LT", "LG", "C", "RG", "RT"]
+# defender's depth-chart slot -> share of his pressures charged to each blocker
+FRONT_43 = {"RDE": {"LT": .8, "LG": .2}, "LDE": {"RT": .8, "RG": .2},
+            "RDT": {"LG": .7, "C": .3}, "LDT": {"RG": .7, "C": .3},
+            "NT": {"C": .6, "LG": .2, "RG": .2}}
+FRONT_34 = {"RDE": {"LT": .4, "LG": .6}, "LDE": {"RT": .4, "RG": .6},
+            "NT": {"C": .6, "LG": .2, "RG": .2},
+            "SLB": {"LT": .5, "RT": .5}, "WLB": {"LT": .5, "RT": .5}}
+# run direction -> share of the run credited to each blocker
+GAPS = {("left", "end"): {"LT": .6}, ("left", "tackle"): {"LT": .5, "LG": .5},
+        ("left", "guard"): {"LG": .6, "C": .4}, ("middle", None): {"C": .5, "LG": .25, "RG": .25},
+        ("right", "guard"): {"RG": .6, "C": .4}, ("right", "tackle"): {"RT": .5, "RG": .5},
+        ("right", "end"): {"RT": .6}}
+
+
+def slot_lookup(depth, games):
+    """For every team-game, each player's depth-chart slot on the latest chart before kickoff."""
+    depth = depth.copy()
+    depth["day"] = pd.to_datetime(depth.dt).dt.tz_localize(None).dt.normalize()
+    out = []
+    for (gid, team, gdate) in games[["game_id", "team", "game_date"]].drop_duplicates().itertuples(index=False):
+        d = depth[(depth.team == team) & (depth.day <= gdate)]
+        if d.empty:
+            d = depth[depth.team == team]
+        if d.empty:
+            continue
+        snap = d[d.day == d.day.max()]
+        snap = snap.sort_values("pos_rank").drop_duplicates("gsis_id")
+        out.append(snap.assign(game_id=gid)[["game_id", "team", "gsis_id", "pos_abb", "pos_grp"]])
+    return pd.concat(out, ignore_index=True) if out else pd.DataFrame(
+        columns=["game_id", "team", "gsis_id", "pos_abb", "pos_grp"])
+
+
+def ol_games(snaps, pbp, depth, adv, people):
+    """One row per offensive lineman per game with his individually credited numbers."""
+    pbp = pbp.copy()
+    pbp["game_date"] = pd.to_datetime(pbp.game_date)
+    games = pd.concat([pbp[["game_id", "posteam", "game_date"]].rename(columns={"posteam": "team"}),
+                       pbp[["game_id", "defteam", "game_date"]].rename(columns={"defteam": "team"})]).dropna().drop_duplicates()
+    slots = slot_lookup(depth, games)
+
+    ol = snaps[snaps.offense_snaps > 0].merge(people[["pfr_id", "gsis_id"]], left_on="pfr_player_id",
+                                              right_on="pfr_id", how="left")
+    ol = ol.merge(slots[["game_id", "team", "gsis_id", "pos_abb"]], on=["game_id", "team", "gsis_id"], how="left")
+    ol = ol[ol.pos_abb.isin(OL_SLOTS)].copy()
+    ol["pct"] = ol.offense_pct.clip(0, 1)
+
+    # 1) pass pro: opponent defenders' pressures routed to the blocker across from them
+    plays = pbp[pbp.play_type.isin(["pass", "run"])]
+    drop = plays.groupby(["game_id", "posteam"]).agg(db=("qb_dropback", "sum"), n=("play_type", "size")).reset_index()
+    drop["db_rate"] = drop.db / drop.n
+    ol = ol.merge(drop[["game_id", "posteam", "db_rate"]], left_on=["game_id", "team"],
+                  right_on=["game_id", "posteam"], how="left")
+    ol["pass_snaps"] = ol.offense_snaps * ol.db_rate.fillna(.6)
+
+    a = adv.merge(people[["pfr_id", "gsis_id"]], left_on="pfr_player_id", right_on="pfr_id", how="left")
+    a = a.merge(slots.rename(columns={"team": "dteam"}), left_on=["game_id", "team", "gsis_id"],
+                right_on=["game_id", "dteam", "gsis_id"], how="inner")
+    rows = []
+    for r in a.itertuples(index=False):
+        front = FRONT_34 if str(r.pos_grp).startswith("Base 3-4") else FRONT_43
+        for slot, w in front.get(r.pos_abb, {}).items():
+            rows.append((r.game_id, r.opponent, slot, w * (r.def_pressures or 0), w * (r.def_sacks or 0)))
+    pr = pd.DataFrame(rows, columns=["game_id", "team", "pos_abb", "pr", "sk"])
+    pr = pr.groupby(["game_id", "team", "pos_abb"]).sum().reset_index()
+    ol = ol.merge(pr, on=["game_id", "team", "pos_abb"], how="left")
+    ol[["pr", "sk"]] = ol[["pr", "sk"]].fillna(0)
+    # a lineman who played half the game takes half the pressure from his side
+    ol["pressures_allowed"] = ol.pr * ol.pct
+    ol["sacks_allowed"] = ol.sk * ol.pct
+
+    # 2) run blocking through his gaps
+    runs = pbp[(pbp.play_type == "run") & (pbp.qb_scramble != 1) & pbp.run_location.notna()].copy()
+    runs["gap"] = runs.run_gap.where(runs.run_location != "middle", None)
+    rr = []
+    for r in runs.itertuples(index=False):
+        g = r.gap if isinstance(r.gap, str) else None
+        for slot, w in GAPS.get((r.run_location, g), {}).items():
+            rr.append((r.game_id, r.posteam, slot, w, w * r.epa, w * r.success))
+    rr = pd.DataFrame(rr, columns=["game_id", "team", "pos_abb", "rw", "repa", "rsucc"])
+    rr = rr.groupby(["game_id", "team", "pos_abb"]).sum().reset_index()
+    ol = ol.merge(rr, on=["game_id", "team", "pos_abb"], how="left")
+    for c in ["rw", "repa", "rsucc"]:
+        ol[c] = ol[c].fillna(0) * ol.pct
+    tm = runs.groupby(["game_id", "posteam"]).agg(t_n=("success", "size"), t_succ=("success", "sum")).reset_index()
+    ol = ol.merge(tm, left_on=["game_id", "team"], right_on=["game_id", "posteam"], how="left", suffixes=("", "_r"))
+    ol["t_n"] = ol.t_n.fillna(0) * ol.pct
+    ol["t_succ"] = ol.t_succ.fillna(0) * ol.pct
+
+    # 3) penalties he committed
+    pen = pbp[pbp.penalty_player_id.notna() & (pbp.penalty_team == pbp.posteam)]
+    pen = pen.groupby(["game_id", "penalty_player_id"]).size().rename("ol_pen").reset_index()
+    ol = ol.merge(pen, left_on=["game_id", "gsis_id"], right_on=["game_id", "penalty_player_id"], how="left")
+    ol["ol_pen"] = ol.ol_pen.fillna(0)
+
+    return ol[["pfr_player_id", "week", "pos_abb", "offense_snaps", "pass_snaps", "pressures_allowed",
+               "sacks_allowed", "rw", "repa", "rsucc", "t_n", "t_succ", "ol_pen"]]
+
+
+def ol_through(week, olg):
+    g = olg[olg.week <= week]
+    if g.empty:
+        return pd.DataFrame(columns=["pfr_player_id"])
+    slot = g.groupby("pfr_player_id").pos_abb.agg(lambda s: s.value_counts().index[0]).rename("ol_slot")
+    s = g.groupby("pfr_player_id")[["offense_snaps", "pass_snaps", "pressures_allowed", "sacks_allowed", "rw",
+                                   "repa", "rsucc", "t_n", "t_succ", "ol_pen"]].sum()
+    s = s.join(slot)
+    s["pressure_rate"] = 100 * (s.pressures_allowed + s.sacks_allowed) / s.pass_snaps.clip(lower=1)
+    s["gap_epa"] = s.repa / s.rw.replace(0, np.nan)
+    s["gap_success"] = s.rsucc / s.rw.replace(0, np.nan)
+    s["gap_vs_team"] = s.gap_success - s.t_succ / s.t_n.replace(0, np.nan)
+    s["ol_pen_per_100"] = 100 * s.ol_pen / s.offense_snaps.clip(lower=1)
+    # centers face fewer attributed rushers than tackles: compare each lineman to his own spot
+    s["pr_vs_slot"] = s.pressure_rate - s.groupby("ol_slot").pressure_rate.transform("mean")
+    lg = s.gap_epa.mean(); lgs = s.gap_vs_team.mean()
+    s["gap_epa"] = s.gap_epa.fillna(lg); s["gap_vs_team"] = s.gap_vs_team.fillna(lgs)
+    return s.reset_index()[["pfr_player_id", "ol_slot", "pressures_allowed", "sacks_allowed", "pressure_rate", "pr_vs_slot",
+                            "gap_epa", "gap_success", "gap_vs_team", "ol_pen", "ol_pen_per_100"]]
+
+
 def age_mult(g, age):
     if pd.isna(age):
         return 1.0
@@ -83,7 +212,7 @@ def age_mult(g, age):
     return max(0.35, 1 - dec * max(0, age - peak))
 
 
-def grade_through(week, snaps, weekly, people):
+def grade_through(week, snaps, weekly, people, olg):
     """Grade every qualifying player using games through `week`."""
     s = snaps[snaps.week <= week]
     agg = s.groupby("pfr_player_id").agg(
@@ -121,6 +250,10 @@ def grade_through(week, snaps, weekly, people):
     tq["team_sack_rate"] = tq.sk / (tq.att + tq.sk)
     tq["team_rush_epa"] = tq.repa / tq.car
     df = df.merge(tq[["team_sack_rate", "team_rush_epa"]], left_on="team", right_index=True, how="left")
+    df = df.merge(ol_through(week, olg), on="pfr_player_id", how="left")
+    olm = df.group.isin(["OT", "IOL"])
+    for c in ["pressure_rate", "pr_vs_slot", "gap_epa", "gap_vs_team", "ol_pen_per_100"]:
+        df.loc[olm, c] = df.loc[olm, c].fillna(df.loc[olm, c].median())
 
     o = df.off_snaps.clip(lower=1); d = df.def_snaps.clip(lower=1)
     db = (df.attempts + df.sacks_suffered).clip(lower=1)
@@ -175,19 +308,30 @@ def main():
     players = read_csv("players/players.csv")
     contracts = pd.read_parquet(io.BytesIO(fetch("contracts/historical_contracts.parquet")))
 
+    pbp = pd.read_csv(io.BytesIO(fetch(f"pbp/play_by_play_{season}.csv.gz")), compression="gzip", low_memory=False,
+                      usecols=["game_id", "game_date", "season_type", "week", "posteam", "defteam", "play_type",
+                               "qb_dropback", "qb_scramble", "run_location", "run_gap", "epa", "success",
+                               "penalty_player_id", "penalty_team"])
+    pbp = pbp[pbp.season_type == "REG"]
+    depth = read_csv(f"depth_charts/depth_charts_{season}.csv")
+    adv = read_csv(f"pfr_advstats/advstats_week_def_{season}.csv")
+    adv = adv[adv.game_type == "REG"]
+
     last_week = int(min(snaps.week.max(), weekly.week.max()))
     asof = pd.Timestamp(dt.date.today())
     people = players[["pfr_id", "gsis_id", "pff_position", "position", "birth_date", "draft_round", "draft_pick",
                       "college_name", "headshot", "jersey_number", "years_of_experience"]].drop_duplicates("pfr_id")
 
+    olg = ol_games(snaps, pbp, depth, adv, people)
+
     # grade trend: one grading pass per week (cumulative through that week)
     history = {}
     for wk in range(1, last_week + 1):
-        g = grade_through(wk, snaps, weekly, people)
+        g = grade_through(wk, snaps, weekly, people, olg)
         for pid, gr in zip(g.pfr_player_id, g.grade):
             history.setdefault(pid, []).append([wk, float(gr)])
 
-    df = grade_through(last_week, snaps, weekly, people)
+    df = grade_through(last_week, snaps, weekly, people, olg)
     bd = pd.to_datetime(df.birth_date, errors="coerce")
     df["age"] = ((asof - bd).dt.days / 365.25).round(1)
 
@@ -230,6 +374,9 @@ def main():
         "qb_hits": df.def_qb_hits.astype(int), "pd": df.def_pass_defended.astype(int), "def_int": df.def_interceptions.astype(int),
         "ff": df.def_fumbles_forced.astype(int), "penalties": df.penalties.astype(int),
         "team_sack_rate": r(df.team_sack_rate), "team_rush_epa": r(df.team_rush_epa),
+        "ol_slot": df.ol_slot, "pressures_allowed": r(df.pressures_allowed, 1), "sacks_allowed": r(df.sacks_allowed, 1),
+        "pressure_rate": r(df.pressure_rate, 2), "gap_epa": r(df.gap_epa), "gap_success": r(df.gap_success),
+        "gap_vs_team": r(df.gap_vs_team), "ol_pen": df.ol_pen,
     })
     out["hist"] = out.id.map(lambda i: history.get(i, []))
     out = out.sort_values("grade", ascending=False)
