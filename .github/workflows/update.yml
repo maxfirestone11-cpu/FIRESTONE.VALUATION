@@ -1,0 +1,41 @@
+name: Weekly data update
+
+on:
+  schedule:
+    # Every Tuesday at 15:00 UTC (11am ET), after Monday Night Football.
+    # nflverse usually has the week's snaps and stats posted by then.
+    - cron: "0 15 * * 2"
+  workflow_dispatch: {}   # adds a "Run workflow" button for manual updates
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Build player data
+        run: python build.py
+
+      - name: Commit updated data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898333+github-actions[bot]@users.noreply.github.com"
+          git add docs/data
+          if git diff --cached --quiet; then
+            echo "No changes this week."
+          else
+            MSG=$(python -c "import json; m=json.load(open('docs/data/meta.json')); print(m['season'], 'week', m['week'])")
+            git commit -m "Weekly data update: $MSG"
+            git push
+          fi

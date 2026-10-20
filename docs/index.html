@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Who’s worth the money? NFL player value board</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏈</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  color-scheme: light;
+  --board: #E9EDF1; --surface: #FFFFFF; --ink: #16212E; --muted: #5B6877; --line: #C9D1DA;
+  --green: #17834A; --red: #C2342C; --blue: #1F57C3; --dot-muted: #9AA6B3;
+  --cond: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --sans: "Barlow", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --board: #10161D; --surface: #18212B; --ink: #E6ECF2; --muted: #93A1B0; --line: #2A3644;
+    --green: #3DBA74; --red: #F0645A; --blue: #6F9BFF; --dot-muted: #56636F;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --board: #10161D; --surface: #18212B; --ink: #E6ECF2; --muted: #93A1B0; --line: #2A3644;
+  --green: #3DBA74; --red: #F0645A; --blue: #6F9BFF; --dot-muted: #56636F;
+}
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+*, *::before, *::after { box-sizing: inherit; }
+body { margin: 0; background: var(--board); color: var(--ink); font-family: var(--sans); font-size: 16px; line-height: 1.45; }
+a { color: var(--blue); }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.wrap { max-width: 1240px; margin-inline: auto; padding: 0 clamp(16px, 4vw, 40px); }
+
+header.top { padding: clamp(28px, 6vw, 64px) 0 20px; display: grid; gap: 12px; }
+h1 { font-family: var(--cond); font-weight: 700; font-size: clamp(44px, 8vw, 96px); line-height: .9; letter-spacing: -.01em; margin: 0; max-width: 12ch; }
+.lede { max-width: 62ch; color: var(--muted); font-size: 18px; margin: 0; }
+.stamp { font-family: var(--cond); font-weight: 600; font-size: 18px; color: var(--ink); }
+
+.hero { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: clamp(14px, 2.5vw, 28px); }
+.hero h2, .panel h2, section h2 { font-family: var(--cond); font-weight: 600; font-size: 28px; line-height: 1.05; margin: 0 0 4px; }
+.note { color: var(--muted); font-size: 14px; margin: 0 0 12px; max-width: 70ch; }
+.chart { position: relative; width: 100%; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart text { font-family: var(--sans); fill: var(--muted); font-size: 12px; }
+.chart .anno { font-family: var(--cond); font-weight: 700; font-size: 26px; opacity: .9; }
+.tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 20px rgb(0 0 0 / .14); padding: 8px 10px; font-size: 13px; display: none; z-index: 5; min-width: 180px; }
+.tip b { font-family: var(--cond); font-size: 18px; font-weight: 600; display: block; }
+.tip .sub { color: var(--muted); }
+
+.controls { position: sticky; top: 0; z-index: 10; background: var(--board); padding: 14px 0 12px; margin-top: 28px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 11; background: var(--board); }
+.seg { display: flex; flex-wrap: wrap; gap: 2px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+.seg button { border: 0; background: none; padding: 5px 10px; border-radius: 7px; cursor: pointer; font-family: var(--cond); font-weight: 600; font-size: 16px; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--board); }
+.snap { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+.snap output { font-family: var(--cond); font-weight: 700; font-size: 20px; color: var(--ink); min-width: 3ch; }
+.snap input { accent-color: var(--ink); width: 140px; }
+.search { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 7px 12px; min-width: 200px; flex: 1 1 200px; max-width: 320px; }
+.sortsel { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 7px 10px; }
+.count { font-size: 14px; color: var(--muted); margin-left: auto; }
+
+.results { padding: 18px 0 8px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 14px 12px; cursor: pointer; text-align: left; display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; position: relative; }
+.card:hover { border-color: var(--ink); }
+.card .name { font-family: var(--cond); font-weight: 600; font-size: 22px; line-height: 1.05; }
+.card .meta { font-size: 13px; color: var(--muted); grid-column: 1; }
+.card .gr { grid-row: 1 / span 2; grid-column: 2; font-family: var(--cond); font-weight: 700; font-size: 46px; line-height: .85; text-align: right; }
+.card .gr small { display: block; font-size: 12px; font-family: var(--sans); font-weight: 500; color: var(--muted); letter-spacing: 0; }
+.card .money { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); font-size: 12px; color: var(--muted); }
+.card .money b { display: block; font-family: var(--cond); font-weight: 600; font-size: 19px; color: var(--ink); }
+.card .line { grid-column: 1 / -1; font-size: 13px; margin-top: 8px; color: var(--ink); }
+.pos { color: var(--green); } .neg { color: var(--red); }
+.card .money b.pos { color: var(--green); } .card .money b.neg { color: var(--red); }
+.spark { grid-column: 1 / -1; width: 100%; height: 26px; margin-top: 6px; }
+.more { display: block; margin: 18px auto 0; border: 1px solid var(--ink); background: none; border-radius: 10px; padding: 9px 18px; font-family: var(--cond); font-weight: 600; font-size: 18px; cursor: pointer; }
+.empty { padding: 40px 0; color: var(--muted); }
+
+.tablewrap { overflow: auto; max-height: 75vh; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
+th { position: sticky; top: 0; background: var(--surface); text-align: right; font-weight: 600; color: var(--muted); padding: 9px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th button { all: unset; cursor: pointer; }
+th[aria-sort="descending"] button::after { content: " ↓"; } th[aria-sort="ascending"] button::after { content: " ↑"; }
+td { text-align: right; padding: 7px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th.l, td.l { text-align: left; }
+tbody tr { cursor: pointer; } tbody tr:hover { background: color-mix(in srgb, var(--blue) 7%, transparent); }
+td.nm { font-weight: 600; }
+
+.two { align-items: start; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 14px; margin-top: 28px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: clamp(14px, 2.5vw, 24px); min-width: 0; }
+
+dialog { border: 1px solid var(--line); border-radius: 16px; padding: 0; background: var(--surface); color: var(--ink); width: min(720px, 94vw); max-height: 90vh; }
+dialog::backdrop { background: rgb(10 16 24 / .5); }
+.dlg { padding: 22px clamp(16px, 3vw, 28px) 24px; }
+.dlg-head { display: grid; grid-template-columns: auto 1fr auto; gap: 16px; align-items: center; padding-right: 22px; }
+.avatar { width: 76px; height: 76px; border-radius: 50%; background: var(--board); overflow: hidden; display: grid; place-items: center; font-family: var(--cond); font-weight: 700; font-size: 28px; color: var(--muted); }
+.avatar img { width: 100%; height: 100%; object-fit: cover; }
+.dlg h3 { font-family: var(--cond); font-weight: 700; font-size: 38px; line-height: 1; margin: 0; }
+.dlg .meta { color: var(--muted); font-size: 14px; }
+.biggr { font-family: var(--cond); font-weight: 700; font-size: 64px; line-height: .85; text-align: right; }
+.biggr small { display: block; font-family: var(--sans); font-size: 12px; font-weight: 500; color: var(--muted); }
+.close { position: absolute; top: 10px; right: 12px; border: 0; background: none; font-size: 26px; cursor: pointer; color: var(--muted); line-height: 1; }
+.kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-top: 18px; }
+.kv div { border-top: 1px solid var(--line); padding-top: 6px; font-size: 13px; color: var(--muted); }
+.kv b { display: block; font-family: var(--cond); font-weight: 600; font-size: 24px; color: var(--ink); }
+.dlg h4 { font-family: var(--cond); font-weight: 600; font-size: 22px; margin: 22px 0 2px; }
+
+.method { margin: 36px 0 60px; max-width: 78ch; color: var(--muted); font-size: 15px; }
+.method h2 { color: var(--ink); }
+.method b { color: var(--ink); }
+.method p { margin: 0 0 12px; }
+
+@media (max-width: 640px) {
+  .controls { gap: 8px 12px; position: static; }
+  .count { margin-left: 0; width: 100%; }
+  .search { max-width: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .dotsin circle { animation: pop .5s cubic-bezier(.2,.7,.2,1) both; }
+  @keyframes pop { from { opacity: 0; } to { opacity: .72; } }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Who’s worth the money?</h1>
+    <p class="lede">Every NFL player with 100+ snaps this season, graded on how he’s actually playing and priced against what teams pay at his position. Click any player for his full card.</p>
+    <div class="stamp" id="stamp">Loading the latest week…</div>
+  </header>
+
+  <section class="hero" id="hero">
+    <h2>Projected worth vs. actual pay</h2>
+    <p class="note">Each dot is a player, in millions per year. Below the dashed line he’s paid less than his play is worth; above it, more. Hover for details, click to open his card.</p>
+    <div class="chart" id="valueChart"></div>
+  </section>
+
+  <div class="controls" id="controls">
+    <div class="seg" id="posSeg" role="group" aria-label="Position"></div>
+    <label class="snap">Min snaps <input type="range" id="snapMin" min="100" max="1200" step="25" value="150"><output id="snapOut">150</output></label>
+    <input class="search" id="search" type="search" placeholder="Search a player, team or college" aria-label="Search">
+    <select class="sortsel" id="sortSel" aria-label="Sort by">
+      <option value="grade">Sort: grade</option>
+      <option value="surplus">Sort: best bargain</option>
+      <option value="surplus_asc">Sort: most overpaid</option>
+      <option value="apy">Sort: highest paid</option>
+      <option value="trend">Sort: hottest last 2 weeks</option>
+      <option value="cost_per_snap_asc">Sort: cheapest per snap</option>
+    </select>
+    <div class="seg" id="viewSeg" role="group" aria-label="View">
+      <button type="button" data-v="cards" aria-pressed="true">Cards</button>
+      <button type="button" data-v="table" aria-pressed="false">Table</button>
+    </div>
+    <span class="count" id="count"></span>
+  </div>
+
+  <section class="results" id="results"></section>
+
+  <div class="two">
+    <section class="panel">
+      <h2>Pay by grade</h2>
+      <p class="note">Gray dots are players on rookie contracts. That’s where cheap production lives.</p>
+      <div class="chart" id="gradeChart"></div>
+    </section>
+    <section class="panel">
+      <h2>Which teams get the most for their money</h2>
+      <p class="note">Total surplus (projected worth minus pay) of each team’s players in the current filter.</p>
+      <div class="chart" id="teamChart"></div>
+    </section>
+  </div>
+
+  <section class="method" id="method">
+    <h2>How the grades and values work</h2>
+    <p><b>Who’s graded.</b> Offensive and defensive players with at least 100 snaps (kickers, punters and fullbacks left out). Early in the season the bar is 20 snaps per week played. The snap slider only changes what you see; grades always compare a player with everyone at his position who qualifies.</p>
+    <p><b>Grade, 50 to 95.</b> Position-specific stats, each scored against the position average, weighted, then ranked: the best player at a position gets 95 and the lowest 50. Quarterbacks: EPA per dropback, completion % over expected, TD-minus-INT rate, sack rate, rushing EPA. Running backs: EPA and yards per carry, scrimmage yards and first downs per snap, fumbles. Receivers and tight ends: receiving yards per snap, EPA per target, target share, catch rate, first downs. Edge and interior linemen: sacks plus half of QB hits per 100 snaps, tackles for loss. Linebackers: tackles, TFL, pass rush, plays on the ball. Corners and safeties: passes defended, interceptions and forced fumbles per 100 snaps, tackling. Offensive linemen have no individual stats in public data, so their grades lean on team sack rate and rushing EPA, plus snap share and penalties; treat them as rough.</p>
+    <p><b>Projected worth.</b> The grade’s percentile is placed on the current veteran market at that position (the top contracts by yearly average, rookie deals left out), then adjusted for age: full value through each position’s peak (running back 25; linebacker, corner and receiver 27; edge, interior line, safety and tight end 28; offensive line 29; quarterback 32), a small bump under 24, then a yearly decline.</p>
+    <p><b>Surplus</b> is projected worth minus average yearly pay. <b>Cost per snap</b> is yearly pay divided by the player’s snap pace over 17 games. <b>Trend</b> is the change in grade over the last two weeks.</p>
+    <p><b>Limits.</b> A few weeks is a small sample, so a backup with two great games can grade like a star. Box scores miss coverage, blocking and pressures that charting services track. Use this to find names worth a closer look.</p>
+    <p><b>Data.</b> <a href="https://github.com/nflverse/nflverse-data">nflverse</a>: snap counts from Pro Football Reference, play-by-play stats and EPA, player IDs, and contracts from OverTheCap. Rebuilt automatically every Tuesday.</p>
+  </section>
+</div>
+
+<dialog id="dlg" aria-labelledby="dlgName"><div class="dlg" id="dlgBody"></div></dialog>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+(async function () {
+  const POS = ["All", "QB", "RB", "WR", "TE", "OT", "IOL", "EDGE", "IDL", "LB", "CB", "S"];
+  const POS_NAME = { QB: "Quarterback", RB: "Running back", WR: "Wide receiver", TE: "Tight end", OT: "Offensive tackle", IOL: "Interior O-line", EDGE: "Edge rusher", IDL: "Interior D-line", LB: "Linebacker", CB: "Cornerback", S: "Safety" };
+  const S = { pos: "All", snapMin: 150, q: "", sort: "grade", view: "cards", shown: 48, tsort: "grade", tdir: -1 };
+
+  // ---- data ----
+  let players, meta;
+  try {
+    if (window.__DATA__) ({ players, meta } = window.__DATA__);
+    else {
+      const [p, m] = await Promise.all([fetch("data/players.json"), fetch("data/meta.json")]);
+      players = await p.json(); meta = await m.json();
+    }
+  } catch (e) {
+    document.getElementById("stamp").textContent = "Couldn’t load player data. Run build.py to create docs/data/players.json, then reload.";
+    return;
+  }
+  players.forEach(r => {
+    const h = r.hist || [];
+    r.trend = h.length >= 3 ? +(h[h.length - 1][1] - h[h.length - 3][1]).toFixed(1) : null;
+  });
+  const upd = new Date(meta.updated);
+  document.getElementById("stamp").textContent =
+    `${meta.season} season through week ${meta.week}. Updated ${upd.toLocaleDateString("en-US", { month: "long", day: "numeric" })}.`;
+  const maxSnaps = d3.max(players, r => r.snaps);
+  const slider = document.getElementById("snapMin");
+  slider.max = Math.max(200, Math.floor(maxSnaps / 25) * 25);
+
+  // ---- formatting ----
+  const fM = v => v == null ? "—" : "$" + (v >= 10 ? d3.format(".0f")(v) : d3.format(".1f")(v)) + "M";
+  const fS = v => v == null ? "—" : (v >= 0 ? "+" : "−") + "$" + d3.format(".1f")(Math.abs(v)) + "M";
+  const fP = d3.format(".0%"), f1 = d3.format(".1f"), f3 = d3.format(".3f"), fC = d3.format(",");
+  const ord = n => n + (["th", "st", "nd", "rd"][(n % 100 - 20) % 10] || ["th", "st", "nd", "rd"][n % 100] || "th");
+  const sgn = v => v == null ? "" : v >= 0 ? "pos" : "neg";
+
+  function keyLine(r) {
+    switch (r.pos) {
+      case "QB": return `${fC(r.pass_yds)} yds, ${r.pass_td} TD, ${r.int} INT, ${f3(r.epa_db)} EPA/db`;
+      case "RB": return `${fC(r.rush_yds)} rush yds, ${f1(r.ypc)} YPC, ${r.rush_td + r.rec_td} TD, ${r.rec} rec`;
+      case "WR": case "TE": return `${r.rec} rec, ${fC(r.rec_yds)} yds, ${r.rec_td} TD, ${fP(r.tgt_share)} of targets`;
+      case "OT": case "IOL": return `Team sack rate ${d3.format(".1%")(r.team_sack_rate)}, ${r.penalties} ${r.penalties === 1 ? "penalty" : "penalties"}`;
+      case "EDGE": case "IDL": return `${r.sacks} sacks, ${r.qb_hits} QB hits, ${r.tfl} TFL`;
+      case "LB": return `${r.tackles} tackles, ${r.tfl} TFL, ${r.sacks} sacks, ${r.pd} PD`;
+      default: return `${r.pd} PD, ${r.def_int} INT, ${r.tackles} tackles, ${r.ff} FF`;
+    }
+  }
+  const STATS = {
+    QB: [["Comp/Att", r => `${r.cmp}/${r.att}`], ["Pass yds", r => fC(r.pass_yds)], ["TD / INT", r => `${r.pass_td} / ${r.int}`], ["EPA / dropback", r => f3(r.epa_db)], ["CPOE", r => f1(r.cpoe)], ["Sacked", r => r.sacked], ["Rush yds", r => fC(r.rush_yds)], ["Total EPA", r => f1(r.total_epa)]],
+    RB: [["Carries", r => r.carries], ["Rush yds", r => fC(r.rush_yds)], ["YPC", r => f1(r.ypc)], ["Rush TD", r => r.rush_td], ["Receptions", r => r.rec], ["Rec yds", r => fC(r.rec_yds)], ["Total EPA", r => f1(r.total_epa)], ["PPR points", r => f1(r.ppr)]],
+    WR: [["Targets", r => r.targets], ["Receptions", r => r.rec], ["Rec yds", r => fC(r.rec_yds)], ["Rec TD", r => r.rec_td], ["Target share", r => fP(r.tgt_share)], ["YAC", r => fC(r.yac)], ["EPA / target", r => f3(r.epa_tgt)], ["PPR points", r => f1(r.ppr)]],
+    OL: [["Team sack rate", r => d3.format(".1%")(r.team_sack_rate)], ["Team rush EPA", r => f3(r.team_rush_epa)], ["Penalties", r => r.penalties], ["Snap share", r => fP(r.snap_share)]],
+    DL: [["Sacks", r => r.sacks], ["QB hits", r => r.qb_hits], ["TFL", r => r.tfl], ["Tackles", r => r.tackles], ["Forced fumbles", r => r.ff], ["Passes defended", r => r.pd]],
+    DB: [["Passes defended", r => r.pd], ["Interceptions", r => r.def_int], ["Tackles", r => r.tackles], ["TFL", r => r.tfl], ["Forced fumbles", r => r.ff], ["Penalties", r => r.penalties]]
+  };
+  const statSet = p => ({ QB: "QB", RB: "RB", WR: "WR", TE: "WR", OT: "OL", IOL: "OL", EDGE: "DL", IDL: "DL", LB: "DL", CB: "DB", S: "DB" })[p];
+
+  // ---- controls ----
+  const seg = document.getElementById("posSeg");
+  POS.forEach(p => {
+    const b = document.createElement("button"); b.type = "button"; b.textContent = p;
+    b.setAttribute("aria-pressed", p === S.pos);
+    b.onclick = () => { S.pos = p; S.shown = 48; seg.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x.textContent === p)); render(); };
+    seg.appendChild(b);
+  });
+  const out = document.getElementById("snapOut");
+  slider.oninput = () => { S.snapMin = +slider.value; out.textContent = slider.value; S.shown = 48; render(); };
+  document.getElementById("search").oninput = e => { S.q = e.target.value.trim().toLowerCase(); S.shown = 48; render(); };
+  document.getElementById("sortSel").onchange = e => { S.sort = e.target.value; S.shown = 48; render(); };
+  document.querySelectorAll("#viewSeg button").forEach(b => b.onclick = () => {
+    S.view = b.dataset.v; document.querySelectorAll("#viewSeg button").forEach(x => x.setAttribute("aria-pressed", x === b)); renderResults(filtered());
+  });
+
+  function filtered() {
+    return players.filter(r => r.snaps >= S.snapMin && (S.pos === "All" || r.pos === S.pos) &&
+      (!S.q || `${r.player} ${r.team} ${r.college || ""}`.toLowerCase().includes(S.q)));
+  }
+  const nullLast = (f, dir) => (a, b) => { const x = f(a), y = f(b); if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1; return (x - y) * dir; };
+  function sorted(rows) {
+    const s = S.sort, by = {
+      grade: nullLast(r => r.grade, -1), surplus: nullLast(r => r.surplus, -1), surplus_asc: nullLast(r => r.surplus, 1),
+      apy: nullLast(r => r.apy, -1), trend: nullLast(r => r.trend, -1), cost_per_snap_asc: nullLast(r => r.cost_per_snap, 1)
+    }[s];
+    return [...rows].sort(by);
+  }
+
+  // ---- results: cards ----
+  function spark(svgEl, hist) {
+    const W = 220, H = 26, svg = d3.select(svgEl).attr("viewBox", `0 0 ${W} ${H}`).attr("preserveAspectRatio", "none");
+    if (!hist || hist.length < 2) return;
+    const x = d3.scaleLinear([hist[0][0], hist[hist.length - 1][0]], [2, W - 2]), y = d3.scaleLinear([50, 95], [H - 3, 3]);
+    svg.append("path").attr("d", d3.line(d => x(d[0]), d => y(d[1]))(hist)).attr("fill", "none").attr("stroke", "var(--ink)").attr("stroke-width", 1.5).attr("stroke-linejoin", "round").attr("stroke-linecap", "round").attr("vector-effect", "non-scaling-stroke");
+    const l = hist[hist.length - 1]; svg.append("circle").attr("cx", x(l[0])).attr("cy", y(l[1])).attr("r", 2.5).attr("fill", "var(--ink)");
+  }
+  function renderCards(el, rows) {
+    const list = d3.select(el).append("div").attr("class", "cards");
+    rows.slice(0, S.shown).forEach(r => {
+      const c = list.append("button").attr("type", "button").attr("class", "card").on("click", () => openPlayer(r));
+      c.append("div").attr("class", "name").text(r.player);
+      c.append("div").attr("class", "meta").text(`${r.pos}, ${r.team}${r.age != null ? ", age " + Math.floor(r.age) : ""}`);
+      const g = c.append("div").attr("class", "gr").text(Math.round(r.grade));
+      g.append("small").text(`${ord(r.pos_rank)} of ${r.pos_count} ${r.pos}`);
+      const m = c.append("div").attr("class", "money");
+      [["Pay / yr", fM(r.apy), ""], ["Worth / yr", fM(r.worth), ""], ["Surplus", fS(r.surplus), sgn(r.surplus)]].forEach(([k, v, cl]) => {
+        const d = m.append("div").text(k); d.insert("b", ":first-child").attr("class", cl).text(v);
+      });
+      c.append("div").attr("class", "line").text(keyLine(r));
+      spark(c.append("svg").attr("class", "spark").attr("aria-hidden", "true").node(), r.hist);
+    });
+    if (rows.length > S.shown) {
+      d3.select(el).append("button").attr("type", "button").attr("class", "more").text(`Show ${Math.min(48, rows.length - S.shown)} more`)
+        .on("click", () => { S.shown += 48; renderResults(filtered()); });
+    }
+  }
+
+  // ---- results: table ----
+  const TCOLS = [
+    ["player", "Player", r => r.player, "l nm"], ["pos", "Pos", r => r.pos, "l"], ["team", "Team", r => r.team, "l"],
+    ["age", "Age", r => r.age == null ? "—" : f1(r.age)], ["snaps", "Snaps", r => fC(r.snaps)], ["snap_share", "Snap %", r => fP(r.snap_share)],
+    ["grade", "Grade", r => f1(r.grade)], ["trend", "2-wk trend", r => r.trend == null ? "—" : (r.trend >= 0 ? "+" : "") + f1(r.trend)],
+    ["apy", "Pay / yr", r => fM(r.apy)], ["worth", "Worth / yr", r => fM(r.worth)], ["surplus", "Surplus", r => fS(r.surplus)],
+    ["guaranteed", "Guaranteed", r => fM(r.guaranteed)], ["cost_per_snap", "$ / snap", r => r.cost_per_snap == null ? "—" : "$" + fC(r.cost_per_snap)],
+    ["total_epa", "Total EPA", r => f1(r.total_epa)], ["key", "Key stats", r => keyLine(r), "l"]
+  ];
+  function renderTable(el, rows) {
+    const col = TCOLS.find(c => c[0] === S.tsort);
+    const rs = [...rows].sort((a, b) => {
+      const x = a[S.tsort], y = b[S.tsort];
+      if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1;
+      return (typeof x === "string" ? x.localeCompare(y) : x - y) * S.tdir;
+    });
+    const t = d3.select(el).append("div").attr("class", "tablewrap").append("table");
+    const hr = t.append("thead").append("tr");
+    TCOLS.forEach(([k, label, , cl]) => {
+      const th = hr.append("th").attr("class", cl && cl.includes("l") ? "l" : null);
+      if (S.tsort === k) th.attr("aria-sort", S.tdir < 0 ? "descending" : "ascending");
+      if (k === "key") th.text(label);
+      else th.append("button").text(label).on("click", () => {
+        if (S.tsort === k) S.tdir = -S.tdir; else { S.tsort = k; S.tdir = cl && cl.includes("l") ? 1 : -1; }
+        renderResults(filtered());
+      });
+    });
+    const tb = t.append("tbody");
+    rs.forEach(r => {
+      const tr = tb.append("tr").on("click", () => openPlayer(r));
+      TCOLS.forEach(([k, , f, cl]) => {
+        tr.append("td").attr("class", [cl, k === "surplus" || k === "trend" ? sgn(r[k]) : ""].filter(Boolean).join(" ") || null).text(f(r));
+      });
+    });
+  }
+
+  function renderResults(rows) {
+    const el = document.getElementById("results"); el.innerHTML = "";
+    document.getElementById("count").textContent = `${fC(rows.length)} player${rows.length === 1 ? "" : "s"}`;
+    if (!rows.length) { d3.select(el).append("p").attr("class", "empty").text("No players match. Lower the snap minimum or clear the search."); return; }
+    if (S.view === "cards") renderCards(el, sorted(rows)); else renderTable(el, rows);
+  }
+
+  // ---- scatter ----
+  const tipFor = el => { let t = el.querySelector(".tip"); if (!t) { t = document.createElement("div"); t.className = "tip"; el.appendChild(t); } return t; };
+  function showTip(el, tip, r, px, py) {
+    tip.innerHTML = "";
+    const b = document.createElement("b"); b.textContent = r.player; tip.appendChild(b);
+    const s = document.createElement("div"); s.className = "sub"; s.textContent = `${r.pos}, ${r.team}, grade ${f1(r.grade)}`; tip.appendChild(s);
+    const m = document.createElement("div"); m.textContent = `Paid ${fM(r.apy)}, worth ${fM(r.worth)}`; tip.appendChild(m);
+    const v = document.createElement("div"); v.className = sgn(r.surplus); v.textContent = `Surplus ${fS(r.surplus)}`; tip.appendChild(v);
+    tip.style.display = "block";
+    const w = tip.offsetWidth, h = tip.offsetHeight;
+    tip.style.left = Math.min(Math.max(0, px + 12), el.clientWidth - w) + "px";
+    tip.style.top = Math.max(0, py - h - 10) + "px";
+  }
+  function scatter(el, rows, o) {
+    el.innerHTML = "";
+    const pts = rows.filter(r => r[o.x] != null && r[o.y] != null);
+    const W = Math.max(300, el.clientWidth), H = o.h, m = { t: 12, r: 16, b: 42, l: 54 };
+    const svg = d3.select(el).append("svg").attr("viewBox", `0 0 ${W} ${H}`).attr("role", "img").attr("aria-label", o.label);
+    const ymax = d3.max(pts, r => r[o.y]) || 1, xmax = o.sqrtX ? Math.max(ymax, d3.max(pts, r => r[o.x]) || 1) : null;
+    const x = o.sqrtX ? d3.scaleSqrt([0, xmax], [m.l, W - m.r]) : d3.scaleLinear([48, 96], [m.l, W - m.r]);
+    const y = d3.scaleSqrt([0, o.sqrtX ? xmax : ymax], [H - m.b, m.t]);
+    const money = [0, 1, 5, 10, 20, 30, 40, 50, 60, 70].filter(v => v <= y.domain()[1]);
+    const yt = money.filter((v, i) => i === 0 || y(money[i - 1]) - y(v) > 16);
+    svg.append("g").selectAll("line").data(yt).join("line").attr("x1", m.l).attr("x2", W - m.r).attr("y1", d => y(d)).attr("y2", d => y(d)).attr("stroke", "var(--line)");
+    svg.append("g").selectAll("text").data(yt).join("text").attr("x", m.l - 8).attr("y", d => y(d) + 4).attr("text-anchor", "end").text(d => "$" + d + "M");
+    let xt = o.sqrtX ? money.filter(v => v <= xmax) : [50, 60, 70, 80, 90];
+    if (o.sqrtX) xt = xt.filter((v, i) => i === 0 || x(v) - x(xt[i - 1]) > 34);
+    svg.append("g").selectAll("text").data(xt).join("text").attr("x", d => x(d)).attr("y", H - m.b + 18).attr("text-anchor", "middle").text(d => o.sqrtX ? "$" + d + "M" : d);
+    svg.append("text").attr("x", (m.l + W - m.r) / 2).attr("y", H - 4).attr("text-anchor", "middle").text(o.xLabel);
+    svg.append("text").attr("transform", `translate(13,${(H - m.b + m.t) / 2}) rotate(-90)`).attr("text-anchor", "middle").text(o.yLabel);
+    if (o.sqrtX) {
+      const ln = d3.range(0, 101).map(i => xmax * i / 100);
+      svg.append("path").attr("d", d3.line(v => x(v), v => y(v))(ln)).attr("stroke", "var(--muted)").attr("stroke-dasharray", "5 5").attr("fill", "none");
+      svg.append("text").attr("class", "anno").attr("x", W - m.r - 4).attr("y", y(xmax * .12)).attr("text-anchor", "end").style("fill", "var(--green)").text("Bargains");
+      svg.append("text").attr("class", "anno").attr("x", x(xmax * .04) + 6).attr("y", y(xmax * .55)).style("fill", "var(--red)").text("Overpaid");
+    }
+    const R = W < 520 ? 3.2 : 4.2;
+    const dots = svg.append("g").attr("class", "dotsin").selectAll("circle").data(pts).join("circle")
+      .attr("cx", r => x(r[o.x])).attr("cy", r => y(r[o.y])).attr("r", R).attr("fill", o.color).attr("fill-opacity", .72)
+      .style("animation-delay", (r, i) => Math.min(600, i) + "ms");
+    const del = d3.Delaunay.from(pts, r => x(r[o.x]), r => y(r[o.y]));
+    const tip = tipFor(el);
+    let hot = null;
+    const scale = () => el.clientWidth / W;
+    svg.on("pointermove", ev => {
+      const [px, py] = d3.pointer(ev); const r = pts[del.find(px, py)];
+      if (!r || Math.hypot(x(r[o.x]) - px, y(r[o.y]) - py) > 28) { tip.style.display = "none"; dots.attr("r", R); hot = null; svg.style("cursor", null); return; }
+      hot = r; svg.style("cursor", "pointer");
+      dots.attr("r", d => d === r ? R * 2 : R);
+      showTip(el, tip, r, x(r[o.x]) * scale(), y(r[o.y]) * scale());
+    }).on("pointerleave", () => { tip.style.display = "none"; dots.attr("r", R); hot = null; })
+      .on("click", () => { if (hot) openPlayer(hot); });
+  }
+
+  // ---- team bars ----
+  function teamBars(el, rows) {
+    el.innerHTML = "";
+    const t = d3.rollups(rows.filter(r => r.surplus != null), v => d3.sum(v, r => r.surplus), r => r.team)
+      .map(([team, s]) => ({ team, s })).sort((a, b) => b.s - a.s);
+    if (!t.length) return;
+    const W = Math.max(300, el.clientWidth), bh = 14, gap = 5, m = { t: 6, r: 56, b: 6, l: 40 };
+    const H = m.t + m.b + t.length * (bh + gap);
+    const ext = d3.max(t, d => Math.abs(d.s)) || 1;
+    const x = d3.scaleLinear([-ext, ext], [m.l + 4, W - m.r]);
+    const svg = d3.select(el).append("svg").attr("viewBox", `0 0 ${W} ${H}`).attr("role", "img").attr("aria-label", "Team surplus");
+    svg.append("line").attr("x1", x(0)).attr("x2", x(0)).attr("y1", 0).attr("y2", H).attr("stroke", "var(--line)");
+    const g = svg.selectAll("g.b").data(t).join("g").attr("transform", (d, i) => `translate(0,${m.t + i * (bh + gap)})`);
+    g.append("text").attr("x", m.l - 6).attr("y", bh - 3).attr("text-anchor", "end").style("fill", "var(--ink)").style("font-weight", 600).text(d => d.team);
+    g.append("rect").attr("x", d => Math.min(x(0), x(d.s))).attr("width", d => Math.abs(x(d.s) - x(0))).attr("height", bh).attr("rx", 3)
+      .attr("fill", d => d.s >= 0 ? "var(--green)" : "var(--red)").attr("fill-opacity", .8);
+    g.append("text").attr("x", d => d.s >= 0 ? x(d.s) + 5 : x(0) + 5).attr("y", bh - 3).text(d => fS(d.s));
+  }
+
+  // ---- player card ----
+  const dlg = document.getElementById("dlg");
+  dlg.addEventListener("click", e => { if (e.target === dlg) dlg.close(); });
+  function openPlayer(r) {
+    const body = d3.select("#dlgBody"); body.html("");
+    body.append("button").attr("class", "close").attr("type", "button").attr("aria-label", "Close").text("×").on("click", () => dlg.close());
+    const head = body.append("div").attr("class", "dlg-head");
+    const av = head.append("div").attr("class", "avatar").text(r.player.split(" ").map(s => s[0]).slice(0, 2).join(""));
+    if (r.headshot) {
+      const img = new Image(); img.alt = ""; img.onload = () => { av.text(""); av.node().appendChild(img); }; img.src = r.headshot;
+    }
+    const nm = head.append("div");
+    nm.append("h3").attr("id", "dlgName").text(r.player);
+    nm.append("div").attr("class", "meta").text(
+      `${POS_NAME[r.pos]}, ${r.team}${r.jersey != null ? " #" + r.jersey : ""}. ` +
+      `${r.age != null ? "Age " + f1(r.age) + ". " : ""}${r.college ? r.college + ". " : ""}` +
+      `${r.draft_round != null ? "Round " + r.draft_round + ", pick " + r.draft_pick : "Undrafted"}.`);
+    const bg = head.append("div").attr("class", "biggr").text(Math.round(r.grade));
+    bg.append("small").text(`${ord(r.pos_rank)} of ${r.pos_count} ${r.pos}`);
+
+    const kv1 = body.append("div").attr("class", "kv");
+    [["Pay per year", fM(r.apy), ""], ["Projected worth", fM(r.worth), ""], ["Surplus", fS(r.surplus), sgn(r.surplus)],
+     ["Guaranteed", fM(r.guaranteed), ""], ["Contract", r.contract_years ? `${r.contract_years} yrs (${r.year_signed})` : "—", ""],
+     ["Rookie deal", r.rookie_deal == null ? "—" : r.rookie_deal ? "Yes" : "No", ""], ["Cap share", r.cap_pct == null ? "—" : d3.format(".1%")(r.cap_pct), ""],
+     ["Cost per snap", r.cost_per_snap == null ? "—" : "$" + fC(r.cost_per_snap), ""]]
+      .forEach(([k, v, cl]) => { const d = kv1.append("div").text(k); d.insert("b", ":first-child").attr("class", cl || null).text(v); });
+
+    body.append("h4").text("Grade by week");
+    body.append("p").attr("class", "note").text("Each point is his grade using every game through that week.");
+    const tc = body.append("div").attr("class", "chart").node();
+    body.append("h4").text("Season stats");
+    const kv2 = body.append("div").attr("class", "kv");
+    [["Games", r => r.games], ["Snaps", r => fC(r.snaps)], ["Snap share", r => fP(r.snap_share)], ...STATS[statSet(r.pos)]]
+      .forEach(([k, f]) => { const d = kv2.append("div").text(k); d.insert("b", ":first-child").text(f(r)); });
+    dlg.showModal();
+    trendChart(tc, r.hist || []);
+  }
+  function trendChart(el, h) {
+    if (h.length < 2) { el.textContent = "Not enough weeks yet for a trend."; el.className = "note"; return; }
+    const W = Math.max(280, el.clientWidth), H = 150, m = { t: 12, r: 16, b: 26, l: 34 };
+    const x = d3.scaleLinear(d3.extent(h, d => d[0]), [m.l, W - m.r]), y = d3.scaleLinear([48, 98], [H - m.b, m.t + 8]);
+    const svg = d3.select(el).append("svg").attr("viewBox", `0 0 ${W} ${H}`);
+    [50, 60, 70, 80, 90].forEach(v => {
+      svg.append("line").attr("x1", m.l).attr("x2", W - m.r).attr("y1", y(v)).attr("y2", y(v)).attr("stroke", "var(--line)");
+      svg.append("text").attr("x", m.l - 6).attr("y", y(v) + 4).attr("text-anchor", "end").text(v);
+    });
+    h.forEach(d => svg.append("text").attr("x", x(d[0])).attr("y", H - 6).attr("text-anchor", "middle").text("Wk " + d[0]));
+    svg.append("path").attr("d", d3.line(d => x(d[0]), d => y(d[1]))(h)).attr("fill", "none").attr("stroke", "var(--blue)").attr("stroke-width", 2.5).attr("stroke-linejoin", "round").attr("stroke-linecap", "round");
+    svg.selectAll("circle").data(h).join("circle").attr("cx", d => x(d[0])).attr("cy", d => y(d[1])).attr("r", 4).attr("fill", "var(--surface)").attr("stroke", "var(--blue)").attr("stroke-width", 2);
+    const l = h[h.length - 1];
+    svg.append("text").attr("x", x(l[0])).attr("y", y(l[1]) - 10).attr("text-anchor", "end").style("fill", "var(--ink)").style("font-weight", 600).text(f1(l[1]));
+  }
+
+  // ---- render ----
+  function render() {
+    const rows = filtered();
+    const paid = rows.filter(r => r.apy != null);
+    scatter(document.getElementById("valueChart"), paid, { x: "worth", y: "apy", sqrtX: true, h: Math.min(520, Math.max(340, document.getElementById("valueChart").clientWidth * .5)),
+      color: r => r.surplus >= 0 ? "var(--green)" : "var(--red)", xLabel: "Projected worth per year", yLabel: "Actual pay per year", label: "Projected worth versus actual pay" });
+    scatter(document.getElementById("gradeChart"), paid, { x: "grade", y: "apy", sqrtX: false, h: 340,
+      color: r => r.rookie_deal ? "var(--dot-muted)" : "var(--ink)", xLabel: "Grade", yLabel: "Pay per year", label: "Pay by grade" });
+    teamBars(document.getElementById("teamChart"), rows);
+    renderResults(rows);
+  }
+  render();
+  let rw = 0;
+  new ResizeObserver(() => { const w = document.body.clientWidth; if (Math.abs(w - rw) > 40) { rw = w; render(); } }).observe(document.body);
+})();
+</script>
+</body>
+</html>
