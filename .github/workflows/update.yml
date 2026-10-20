@@ -6,6 +6,9 @@ on:
     # nflverse usually has the week's snaps and stats posted by then.
     - cron: "0 15 * * 2"
   workflow_dispatch: {}   # adds a "Run workflow" button for manual updates
+  push:
+    paths:
+      - build.py            # re-grade everyone whenever the formula changes
 
 permissions:
   contents: write
